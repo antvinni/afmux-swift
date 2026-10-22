@@ -1,6 +1,8 @@
 import AFMuxCore
 import Foundation
 
+Signals.install()
+
 let environment = ProcessInfo.processInfo.environment
 let backend: any Backend
 if let path = environment["AFMUX_FAKE"] {
