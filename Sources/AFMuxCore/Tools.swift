@@ -103,3 +103,19 @@ func stringArg(_ args: GeneratedContent, _ key: String) -> String? {
 func intArg(_ args: GeneratedContent, _ key: String) -> Int? {
     (try? args.value(Int?.self, forProperty: key)) ?? nil
 }
+
+/// The tools enabled for one afm call and their shared context.
+public struct Toolset: Sendable {
+    public var tools: [any Tool] = []
+    public var context: ToolContext?
+
+    public static func make(_ o: Options, counter: any TokenCounter) throws -> Toolset {
+        guard o.toolsOn else { return Toolset() }
+        let ctx = ToolContext(counter: counter, maxCalls: o.maxToolCalls, outputBudget: o.toolOutputBudget, toolTimeout: o.toolTimeout)
+        var tools: [any Tool] = o.toolsFS ? builtinTools(context: ctx) : []
+        if let path = o.toolsFile {
+            tools += try loadToolsFile(path).map { commandTool($0, context: ctx) }
+        }
+        return Toolset(tools: tools, context: ctx)
+    }
+}

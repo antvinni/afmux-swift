@@ -46,7 +46,8 @@ func runOnce(_ o: Options, io: IO, backend: any Backend) async throws -> Int32 {
     let job = try resolveJob(o)
     try checkNewCombos(o)
     let counter = TimedCounter(base: backend.counter, timeout: o.timeout)
-    let tools: [any Tool] = []
+    let toolset = try Toolset.make(o, counter: counter)
+    let tools = toolset.tools
     let input = try readInput(io.input, optional: job.name == "ask" && o.toolsOn)
     let shape = callShape(job: job, input: input)
     let schema = try jobSchema(job)
@@ -72,6 +73,7 @@ func runOnce(_ o: Options, io: IO, backend: any Backend) async throws -> Int32 {
         io.out(out)
         return 0
     }
+    toolset.context?.start(used: total)
     do {
         let a = try await answer(ModelCall(instructions: instructions, prompt: shape.prompt, schema: schema, tools: tools),
                                  job: job, model: model, timeout: o.timeout)
