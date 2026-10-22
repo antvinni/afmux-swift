@@ -1,0 +1,184 @@
+{
+ "engines": {
+  "python": [
+   [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/antonvinni/workspace/github.com/antvinni/afmux/scripts/afm"
+   ],
+   []
+  ],
+  "swift": [
+   [
+    "/Users/antonvinni/workspace/github.com/antvinni/afmux-swift/.build/release/afm"
+   ],
+   []
+  ],
+  "swift --chunk-tokens 600": [
+   [
+    "/Users/antonvinni/workspace/github.com/antvinni/afmux-swift/.build/release/afm"
+   ],
+   [
+    "--chunk-tokens",
+    "600"
+   ]
+  ]
+ },
+ "rows": [
+  {
+   "file": "app.log",
+   "ask": "Which error happened and on which path?",
+   "engine": "python",
+   "exit": 1,
+   "correct": false,
+   "quotes": 0,
+   "output_chars": 0,
+   "file_bytes": 63762,
+   "file_tokens": null,
+   "seconds": 10.5,
+   "stderr": "afm: chunk lines 1-1000: Error: The session's transcript exceeded the model's context size."
+  },
+  {
+   "file": "app.log",
+   "ask": "Which error happened and on which path?",
+   "engine": "swift",
+   "exit": 0,
+   "correct": true,
+   "quotes": 1,
+   "output_chars": 130,
+   "file_bytes": 63762,
+   "file_tokens": 35750,
+   "seconds": 31.4,
+   "stderr": ""
+  },
+  {
+   "file": "app.log",
+   "ask": "Which error happened and on which path?",
+   "engine": "swift --chunk-tokens 600",
+   "exit": 0,
+   "correct": true,
+   "quotes": 1,
+   "output_chars": 130,
+   "file_bytes": 63762,
+   "file_tokens": 35750,
+   "seconds": 43.6,
+   "stderr": ""
+  },
+  {
+   "file": "spec-v1.md",
+   "ask": "What is the default value of --tool-output-budget?",
+   "engine": "python",
+   "exit": 0,
+   "correct": false,
+   "quotes": 0,
+   "output_chars": 98,
+   "file_bytes": 31123,
+   "file_tokens": 8412,
+   "seconds": 12.3,
+   "stderr": ""
+  },
+  {
+   "file": "spec-v1.md",
+   "ask": "What is the default value of --tool-output-budget?",
+   "engine": "swift",
+   "exit": 0,
+   "correct": true,
+   "quotes": 3,
+   "output_chars": 405,
+   "file_bytes": 31123,
+   "file_tokens": 8413,
+   "seconds": 9.7,
+   "stderr": ""
+  },
+  {
+   "file": "spec-v1.md",
+   "ask": "What is the default value of --tool-output-budget?",
+   "engine": "swift --chunk-tokens 600",
+   "exit": 0,
+   "correct": false,
+   "quotes": 0,
+   "output_chars": 98,
+   "file_bytes": 31123,
+   "file_tokens": 8413,
+   "seconds": 12.3,
+   "stderr": ""
+  },
+  {
+   "file": "spec-v1.md",
+   "ask": "Which environment variable selects the fake backend?",
+   "engine": "python",
+   "exit": 0,
+   "correct": true,
+   "quotes": 2,
+   "output_chars": 371,
+   "file_bytes": 31123,
+   "file_tokens": 8412,
+   "seconds": 14.5,
+   "stderr": ""
+  },
+  {
+   "file": "spec-v1.md",
+   "ask": "Which environment variable selects the fake backend?",
+   "engine": "swift",
+   "exit": 0,
+   "correct": true,
+   "quotes": 1,
+   "output_chars": 204,
+   "file_bytes": 31123,
+   "file_tokens": 8413,
+   "seconds": 12.2,
+   "stderr": ""
+  },
+  {
+   "file": "spec-v1.md",
+   "ask": "Which environment variable selects the fake backend?",
+   "engine": "swift --chunk-tokens 600",
+   "exit": 0,
+   "correct": true,
+   "quotes": 2,
+   "output_chars": 371,
+   "file_bytes": 31123,
+   "file_tokens": 8413,
+   "seconds": 13.8,
+   "stderr": ""
+  },
+  {
+   "file": "afm-implementer-design.md",
+   "ask": "How many of the seven tasks did the on-device model fully pass?",
+   "engine": "python",
+   "exit": 0,
+   "correct": false,
+   "quotes": 1,
+   "output_chars": 383,
+   "file_bytes": 11843,
+   "file_tokens": 3271,
+   "seconds": 6.7,
+   "stderr": ""
+  },
+  {
+   "file": "afm-implementer-design.md",
+   "ask": "How many of the seven tasks did the on-device model fully pass?",
+   "engine": "swift",
+   "exit": 0,
+   "correct": true,
+   "quotes": 2,
+   "output_chars": 148,
+   "file_bytes": 11843,
+   "file_tokens": 3272,
+   "seconds": 4.0,
+   "stderr": ""
+  },
+  {
+   "file": "afm-implementer-design.md",
+   "ask": "How many of the seven tasks did the on-device model fully pass?",
+   "engine": "swift --chunk-tokens 600",
+   "exit": 0,
+   "correct": false,
+   "quotes": 1,
+   "output_chars": 286,
+   "file_bytes": 11843,
+   "file_tokens": 3272,
+   "seconds": 5.8,
+   "stderr": ""
+  }
+ ]
+}

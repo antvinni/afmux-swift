@@ -1,0 +1,6 @@
+[
+  {"file": "app.log", "ask": "Which error happened and on which path?", "expect": "/var/data"},
+  {"file": "spec-v1.md", "ask": "What is the default value of --tool-output-budget?", "expect": "600"},
+  {"file": "spec-v1.md", "ask": "Which environment variable selects the fake backend?", "expect": "AFMUX_FAKE"},
+  {"file": "afm-implementer-design.md", "ask": "How many of the seven tasks did the on-device model fully pass?", "expect": "4 of 7"}
+]

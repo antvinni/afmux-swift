@@ -1,0 +1,296 @@
+{
+ "engines": {
+  "python": [
+   [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "/Users/antonvinni/workspace/github.com/antvinni/afmux/scripts/afm"
+   ],
+   []
+  ],
+  "swift": [
+   [
+    "/Users/antonvinni/workspace/github.com/antvinni/afmux-swift/.build/release/afm"
+   ],
+   []
+  ],
+  "swift --samples 3": [
+   [
+    "/Users/antonvinni/workspace/github.com/antvinni/afmux-swift/.build/release/afm"
+   ],
+   [
+    "--samples",
+    "3"
+   ]
+  ],
+  "swift --split": [
+   [
+    "/Users/antonvinni/workspace/github.com/antvinni/afmux-swift/.build/release/afm"
+   ],
+   [
+    "--split"
+   ]
+  ],
+  "swift --split --samples 3": [
+   [
+    "/Users/antonvinni/workspace/github.com/antvinni/afmux-swift/.build/release/afm"
+   ],
+   [
+    "--split",
+    "--samples",
+    "3"
+   ]
+  ]
+ },
+ "rows": [
+  {
+   "task": "cli",
+   "engine": "python",
+   "exit": 1,
+   "tests": 4,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 9.9,
+   "stderr": ""
+  },
+  {
+   "task": "cli",
+   "engine": "swift",
+   "exit": 1,
+   "tests": 4,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 12.8,
+   "stderr": ""
+  },
+  {
+   "task": "cli",
+   "engine": "swift --samples 3",
+   "exit": 1,
+   "tests": 4,
+   "passed": 0,
+   "attempts": 4,
+   "seconds": 22.3,
+   "stderr": ""
+  },
+  {
+   "task": "cli",
+   "engine": "swift --split",
+   "exit": 1,
+   "tests": 4,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 10.9,
+   "stderr": ""
+  },
+  {
+   "task": "cli",
+   "engine": "swift --split --samples 3",
+   "exit": 1,
+   "tests": 4,
+   "passed": 0,
+   "attempts": 4,
+   "seconds": 23.5,
+   "stderr": ""
+  },
+  {
+   "task": "csvstats",
+   "engine": "python",
+   "exit": 0,
+   "tests": 5,
+   "passed": 5,
+   "attempts": 1,
+   "seconds": 4.1,
+   "stderr": ""
+  },
+  {
+   "task": "csvstats",
+   "engine": "swift",
+   "exit": 0,
+   "tests": 5,
+   "passed": 5,
+   "attempts": 1,
+   "seconds": 4.0,
+   "stderr": ""
+  },
+  {
+   "task": "csvstats",
+   "engine": "swift --samples 3",
+   "exit": 0,
+   "tests": 5,
+   "passed": 5,
+   "attempts": 1,
+   "seconds": 4.1,
+   "stderr": ""
+  },
+  {
+   "task": "csvstats",
+   "engine": "swift --split",
+   "exit": 0,
+   "tests": 5,
+   "passed": 5,
+   "attempts": 1,
+   "seconds": 4.3,
+   "stderr": ""
+  },
+  {
+   "task": "csvstats",
+   "engine": "swift --split --samples 3",
+   "exit": 0,
+   "tests": 5,
+   "passed": 5,
+   "attempts": 1,
+   "seconds": 4.2,
+   "stderr": ""
+  },
+  {
+   "task": "dates",
+   "engine": "python",
+   "exit": 1,
+   "tests": 8,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 15.6,
+   "stderr": ""
+  },
+  {
+   "task": "dates",
+   "engine": "swift",
+   "exit": 1,
+   "tests": 8,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 15.6,
+   "stderr": ""
+  },
+  {
+   "task": "dates",
+   "engine": "swift --samples 3",
+   "exit": 0,
+   "tests": 8,
+   "passed": 8,
+   "attempts": 3,
+   "seconds": 24.3,
+   "stderr": ""
+  },
+  {
+   "task": "dates",
+   "engine": "swift --split",
+   "exit": 1,
+   "tests": 8,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 138.8,
+   "stderr": ""
+  },
+  {
+   "task": "dates",
+   "engine": "swift --split --samples 3",
+   "exit": 0,
+   "tests": 8,
+   "passed": 8,
+   "attempts": 3,
+   "seconds": 26.6,
+   "stderr": ""
+  },
+  {
+   "task": "logline",
+   "engine": "python",
+   "exit": 0,
+   "tests": 4,
+   "passed": 4,
+   "attempts": 1,
+   "seconds": 3.9,
+   "stderr": ""
+  },
+  {
+   "task": "logline",
+   "engine": "swift",
+   "exit": 0,
+   "tests": 4,
+   "passed": 4,
+   "attempts": 1,
+   "seconds": 4.6,
+   "stderr": ""
+  },
+  {
+   "task": "logline",
+   "engine": "swift --samples 3",
+   "exit": 0,
+   "tests": 4,
+   "passed": 4,
+   "attempts": 1,
+   "seconds": 4.6,
+   "stderr": ""
+  },
+  {
+   "task": "logline",
+   "engine": "swift --split",
+   "exit": 1,
+   "tests": 4,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 9.3,
+   "stderr": ""
+  },
+  {
+   "task": "logline",
+   "engine": "swift --split --samples 3",
+   "exit": 0,
+   "tests": 4,
+   "passed": 4,
+   "attempts": 3,
+   "seconds": 13.7,
+   "stderr": ""
+  },
+  {
+   "task": "textfmt",
+   "engine": "python",
+   "exit": 1,
+   "tests": 8,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 9.0,
+   "stderr": ""
+  },
+  {
+   "task": "textfmt",
+   "engine": "swift",
+   "exit": 1,
+   "tests": 8,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 8.6,
+   "stderr": ""
+  },
+  {
+   "task": "textfmt",
+   "engine": "swift --samples 3",
+   "exit": 1,
+   "tests": 8,
+   "passed": 0,
+   "attempts": 4,
+   "seconds": 17.0,
+   "stderr": ""
+  },
+  {
+   "task": "textfmt",
+   "engine": "swift --split",
+   "exit": 1,
+   "tests": 8,
+   "passed": 0,
+   "attempts": 2,
+   "seconds": 9.3,
+   "stderr": ""
+  },
+  {
+   "task": "textfmt",
+   "engine": "swift --split --samples 3",
+   "exit": 1,
+   "tests": 8,
+   "passed": 0,
+   "attempts": 4,
+   "seconds": 17.5,
+   "stderr": ""
+  }
+ ]
+}
