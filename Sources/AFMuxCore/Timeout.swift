@@ -6,7 +6,7 @@ public func withTimeout<T: Sendable>(_ seconds: Double, _ body: @escaping @Senda
         group.addTask { try await body() }
         group.addTask {
             try await Task.sleep(nanoseconds: UInt64(min(seconds, 1e9) * 1_000_000_000))
-            throw AfmError(.model, "timed out after \(pyG(seconds)) s")
+            throw AfmError(.fail, "timed out after \(pyG(seconds)) s")
         }
         defer { group.cancelAll() }
         return try await group.next()!
