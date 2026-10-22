@@ -26,6 +26,7 @@ SW = os.environ.get("AFMUX_SWIFT", os.path.join(ROOT, ".build", "release", "afm"
 # engine name -> (command prefix, extra options after the subcommand)
 IMPLEMENT_ENGINES = {
     "python": ([sys.executable, PY], []),
+    "python --samples 3": ([sys.executable, PY], ["--samples", "3"]),
     "swift": ([SW], []),
     "swift --samples 3": ([SW], ["--samples", "3"]),
     "swift --split": ([SW], ["--split"]),
@@ -33,6 +34,7 @@ IMPLEMENT_ENGINES = {
 }
 READ_ENGINES = {
     "python": ([sys.executable, PY], []),
+    "python --chunk-tokens 1500": ([sys.executable, PY], ["--chunk-tokens", "1500"]),
     "swift": ([SW], []),
     "swift --chunk-tokens 1500": ([SW], ["--chunk-tokens", "1500"]),
 }
