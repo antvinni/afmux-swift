@@ -40,27 +40,39 @@ public final class ToolContext: @unchecked Sendable {
         }
     }
 
-    /// Cut text at a line boundary to fit cap tokens; marker(omitted, kept) ends a cut result.
+    /// Fit text into cap tokens: whole lines first, then the first line that does not fit cut
+    /// by characters, then marker(omitted, kept) for the lines after it.
     func fit(_ text: String, cap: Int, marker: (Int, Int) -> String) async throws -> String {
         let total = try await counter.count(prompt: text, instructions: nil)
         if total <= cap { return text }
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-        var keep = min(lines.count - 1, lines.count * cap / max(1, total))
-        while keep > 0 {
-            let candidate = lines[..<keep].joined(separator: "\n") + "\n" + marker(lines.count - keep, keep)
-            if try await counter.count(prompt: candidate, instructions: nil) <= cap { return candidate }
+        let perChar = Double(total) / Double(max(1, text.count))
+        func head(_ k: Int) -> String { k == 0 ? "" : lines[..<k].joined(separator: "\n") + "\n" }
+        func fits(_ s: String) async throws -> Bool { try await counter.count(prompt: s, instructions: nil) <= cap }
+
+        // Whole lines, estimated from the overall tokens-per-character ratio, then confirmed.
+        var keep = 0
+        var estimate = 0.0
+        for line in lines.dropLast() {
+            estimate += Double(line.count + 1) * perChar
+            if estimate > Double(cap) { break }
+            keep += 1
+        }
+        while keep > 0, try await !fits(head(keep) + marker(lines.count - keep, keep)) {
             keep = min(keep - 1, keep * 9 / 10)
         }
-        // Not even the first line fits: cut it by characters rather than return only a marker.
-        let first = lines[0]
-        let rest = lines.count > 1 ? "\n" + marker(lines.count - 1, 1) : ""
-        var chars = first.count * cap / max(1, total)
+
+        // Then as much of the next line as still fits.
+        let next = lines[keep]
+        let tail = keep + 1 < lines.count ? "\n" + marker(lines.count - keep - 1, keep + 1) : ""
+        let used = try await counter.count(prompt: head(keep) + tail, instructions: nil)
+        var chars = min(next.count - 1, Int(Double(cap - used) / max(perChar, 1e-6)))
         while chars > 0 {
-            let candidate = String(first.prefix(chars)) + " [line truncated]" + rest
-            if try await counter.count(prompt: candidate, instructions: nil) <= cap { return candidate }
+            let candidate = head(keep) + next.prefix(chars) + " [line truncated]" + tail
+            if try await fits(candidate) { return candidate }
             chars = min(chars - 1, chars * 9 / 10)
         }
-        return marker(lines.count, 0)
+        return keep > 0 ? head(keep) + marker(lines.count - keep, keep) : marker(lines.count, 0)
     }
 }
 

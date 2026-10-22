@@ -94,3 +94,14 @@ private func fixture() throws -> URL {
     let multi = try await ctx.fit(String(repeating: "y", count: 400) + "\nsecond\nthird", cap: 20) { omitted, _ in "[truncated: \(omitted) more lines]" }
     #expect(multi.hasPrefix("yyyy") && multi.hasSuffix("[truncated: 2 more lines]"))
 }
+
+@Test func longLineAfterShortOnesIsCutByCharacters() async throws {
+    let ctx = context()
+    let marker: (Int, Int) -> String = { omitted, kept in "[truncated: \(omitted) more lines; next \(kept + 1)]" }
+    let text = "exit 3\nstdout:\n" + String(repeating: "x", count: 4000) + "\nstderr:\nboom"
+    let out = try await ctx.fit(text, cap: 50, marker: marker)
+    #expect(out.hasPrefix("exit 3\nstdout:\nxxxx"), "\(out)")
+    #expect(out.contains("[line truncated]"))
+    #expect(out.hasSuffix("[truncated: 2 more lines; next 4]"))
+    #expect(try await ctx.counter.count(prompt: out, instructions: nil) <= 50)
+}
