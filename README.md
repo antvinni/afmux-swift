@@ -1,5 +1,13 @@
 # afmux-swift
 
+> **Archived 2026-10-22.** Use [afmux](https://github.com/antvinni/afmux)'s
+> Python `afm`. With afmux's read fixes (#15) the two engines gave the same
+> results on every benchmark task; the only Swift advantage was seeded
+> sampling (`--samples`, one extra module of five), which the `fm` CLI cannot
+> do. See [`docs/benchmarks/2026-10-22.md`](docs/benchmarks/2026-10-22.md).
+> If sampling ever matters, a small Swift sampling helper called by afmux
+> would be the way back, not a second `afm`.
+
 A Swift `afm` that is a drop-in engine for the
 [afmux](https://github.com/antvinni/afmux) skill, calling Apple's
 FoundationModels framework in-process instead of the `fm` CLI. Same two jobs:
