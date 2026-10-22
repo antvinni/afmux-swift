@@ -1,7 +1,6 @@
 # afmux-swift design
 
-Date: 2026-10-22. Status: revised after one external review, awaiting
-second review.
+Date: 2026-10-22. Status: reviewed (five passes, no open issues); Step 0 done.
 
 ## Purpose
 
@@ -185,10 +184,9 @@ One rule for every call, with or without a session or tools:
 **pre-call total** = instructions + tool definitions + prior transcript
 entries (sessions only) + prompt + schema.
 
-Tool definitions are counted with `tokenCount(for: tools)` unless Step 0
-shows that `tokenCount(for: transcriptEntries)` already includes the
-instructions entry's `toolDefinitions`, in which case they are counted
-there and not again. Either way they are counted exactly once. If the
+Tool definitions are counted as part of the instructions entry
+(`tokenCount(for: transcriptEntries)` includes `toolDefinitions`, measured
+in Step 0), never separately with `tokenCount(for: tools)`. If the
 pre-call total exceeds `--budget`, the call does not start (exit 6, or
 compaction in a session, or splitting under `--chunk`).
 
@@ -398,20 +396,35 @@ All errors pass through one mapping function, which decides in this order:
 
 ### Pinned stderr messages
 
-Kept word for word from afmux (after the `afm: ` prefix), because SKILL.md
-and agents may match them:
+The reference is **afmux at commit `e814b9e`** (v1 as merged): its
+`scripts/afm`, `presets/` and `tests/test_afm.py`. Every message that
+script emits on a path afmux-swift also has is reproduced word for word
+after the `afm: ` prefix, because SKILL.md and agents may match them. In
+particular:
 
 - `timed out after %g s` (Python `%g` formatting: `120`, `0.5`)
-- `input is %d tokens, budget is %d; rerun with --chunk`
-- `line %d is %d tokens, budget is %d`
-- `input needs %d chunks, max is %d`
+- `input is %d tokens, budget is %d; rerun with --chunk`, and for
+  `commit-msg` `input is %d tokens, budget is %d; pipe a smaller diff, for
+  example { git diff --cached --stat; git diff --cached -U1; }`
+- `line %d is %d tokens plus %d for instructions and schema, budget is %d`
+- `input needs more than %d chunks, max is %d`
 - `chunk %d/%d: ` prefix
 - `interrupted by signal %d`
 - `fm is blocked by a sandbox; run afm outside it`
 - `model not available`
+- `model returned no output` (exit 1, whitespace-only answer)
 - `label %r is not one of a, b, c` (`None` when there is no label)
-- all usage messages in afmux's `resolve_job`, `parse_labels` and
-  `read_input`.
+- `--timeout must be a positive number of seconds`, `--budget must be at
+  least 1`, `--max-chunks must be at least 1`
+- every usage message in `resolve_job`, `parse_labels` (including `label
+  %r: quotes and backslashes are not allowed in labels`), `read_input` and
+  `check_schema_file` (`schema file not found: %s`, `schema file %s is not
+  valid JSON (%s)`; the parenthesised detail is the Swift decoder's text,
+  not Python's).
+
+Input handling follows `read_input`: bytes decoded as UTF-8 with invalid
+sequences replaced, `\r\n` and `\r` normalised to `\n`. Text answers are
+printed as `answer.rstrip() + "\n"`.
 
 `%r` follows Python's `repr` for `str`: single quotes, unless the string
 contains `'` and no `"`, then double quotes; backslash, the chosen quote,
@@ -431,35 +444,42 @@ is tested on those edge cases.
 - The schema's share of `--budget` is `tokenCount(for: GenerationSchema)`
   rather than the token count of the schema file's text, so the exit-6
   cut-off can move by a few tokens.
-- `fm not found or not executable` cannot occur; an unavailable framework
-  is `model not available`, exit 4.
-- `model output is not valid JSON` cannot occur under guided generation;
-  exit 3 remains for label mismatch and unserialisable content.
+- A `--schema` file without `x-order` is accepted (converted as plain JSON
+  Schema) instead of exit 2.
+- `fm not found or not executable`, `fm count-tokens failed/returned ...`
+  and `model output is not valid JSON` cannot occur. An unavailable
+  framework is `model not available`, exit 4; exit 3 remains for label
+  mismatch and unserialisable content.
+- afmux strips ANSI escapes from `fm`'s stderr; framework messages carry
+  none, so there is nothing to strip.
 
 ### Porting afmux's tests
 
+From `tests/test_afm.py` at `e814b9e`. "fm calls" become entries in the
+fake backend's log (`count` and `respond` records).
+
 | afmux test | In afmux-swift |
 |---|---|
-| ListTests (both) | ported; "no fm calls" becomes "no model calls" |
-| UsageTests (all 15) | ported unchanged, same messages; "no fm calls" becomes "no model or counter calls" |
-| `test_fm_missing_is_exit_4` | changed: fake availability `.unavailable` gives exit 4 |
-| `test_sandbox_on_count_tokens_is_exit_5_before_respond` | ported: fake counter throws 1008, no model call made |
-| `test_other_count_failure_is_exit_1_with_stderr` | ported against the fake counter |
-| `test_count_includes_instructions` | changed: fake counter records that instructions were counted |
-| BudgetTests (both) | ported; schema share from the fake counter |
+| ListTests (2) | ported |
+| UsageTests (15) | ported, same messages |
+| `test_fm_missing_is_exit_4` | changed: fake availability `unavailable` gives exit 4 |
+| `test_sandbox_on_count_tokens_is_exit_5_before_respond` | ported: fake counter throws 1008; log has only count records |
+| `test_other_count_failure_is_exit_1_with_stderr` | ported |
+| `test_count_includes_instructions` | changed: the count record holds the instructions and prompt |
+| BudgetTests (2) | ported; schema share from the fake counter (`schemaTokens` override) |
 | `test_success_prints_answer_only` | ported |
-| `test_respond_arguments` | changed: fake model records greedy sampling, guardrails, use-case, instructions and prompt |
-| `test_default_guardrails_permissive` | ported via the same recording |
-| `test_refusal_is_exit_1_with_stderr` | ported: fake throws `guardrailViolation` |
-| `test_respond_failure_with_model_unavailable_is_exit_4` | ported: fake throws, availability `.unavailable` |
+| `test_respond_arguments`, `test_default_guardrails_permissive` | changed: the respond record holds sampling, guardrails, use-case, instructions, prompt, schema |
+| `test_refusal_is_exit_1_with_stderr` | ported: fake throws `guardrailViolation`; log order count, respond |
+| `test_respond_failure_with_model_unavailable_is_exit_4` | ported |
 | `test_sandbox_on_respond_is_exit_5` | ported |
-| `test_timeout_is_exit_1_and_kills_child` | changed: fake sleeps; assert exit 1, message, and that generation was cancelled |
-| `test_sigterm_kills_child_and_removes_temp_schema` | changed: no temp file exists; assert exit 1, message, cancellation |
-| SchemaTests: classify schema fields | changed: assert the built `GenerationSchema` constrains `label` to the enum |
+| `test_timeout_is_exit_1_and_kills_child` | changed: fake sleeps; exit 1 and message |
+| `test_sigterm_kills_child_and_removes_temp_schema` | changed: no temp schema exists; exit 1, `interrupted`, empty stdout |
+| SchemaTests: classify schema fields | changed: the respond record's schema JSON has `label` enum `[bug, feature, question]` |
 | SchemaTests: instructions have labels, compact JSON, label outside list | ported |
 | `test_invalid_json_is_exit_3_with_raw_on_stderr` | dropped (cannot occur) |
-| `test_extract_uses_given_schema_and_compacts`, `test_ask_with_schema` | ported; schema file decoded as `GenerationSchema` |
-| ChunkTests (all 8) | ported against the fake counter |
+| `test_extract_uses_given_schema_and_compacts`, `test_ask_with_schema` | ported |
+| ChunkTests (8) | ported; the fake counter uses the shim's formula `ceil((prompt bytes + instructions bytes) / 4)` and `extraIfContains`, so budgets carry over |
+| ReviewFixTests (21) | ported, except: `test_instructions_starting_with_dash_use_equals_form` changed (record holds the instructions), `test_schema_without_x_order_is_usage_error` changed (accepted, see differences), `test_available_returning_1008_is_exit_5` changed (the respond error itself is the 1008), `test_fm_not_executable_is_exit_4` dropped, `test_ansi_stripped_from_fm_stderr` dropped |
 | IntegrationTests | ported to the IntegrationTests target |
 
 ## Testing
@@ -511,8 +531,8 @@ its README describes; nothing in it changes. Pointing the symlink back at
 
 ## Step 0: spike before implementation
 
-Throwaway code, results recorded in the plan. The design depends on each
-item; if one fails, stop and revise the spec with the user.
+Throwaway code, run 2026-10-22 in the scratchpad (not in the repo). The
+results, per item below, are folded into this spec.
 
 1. A SwiftPM command-line binary can use FoundationModels with no special
    entitlements; measure process start to first token for a one-word
@@ -539,6 +559,38 @@ item; if one fails, stop and revise the spec with the user.
 10. Whether `tokenCount(for: transcriptEntries)` includes the instructions
     entry's `toolDefinitions`, by comparing it with and without tools
     against `tokenCount(for: tools)` (see Budget).
+
+### Results
+
+1. Pass. Builds with no entitlements. A whole process for a one-word
+   answer takes 260 to 290 ms. Approach B is not needed.
+2. Not reproducible here: this session's shell is not sandboxed. Detection
+   matches an `NSError` (or underlying error) with a domain containing
+   `ModelManager` and code 1008, falling back to the error's description
+   containing both `ModelManager` and `1008`. A manual check inside a
+   sandboxed agent session is listed in the README.
+3. Pass. FakeModel and its executor drive the framework's tool loop.
+4. Pass. Encode/decode is lossless and a new session answers from a
+   synthetic summary entry.
+5. Pass. `fm`-format files decode and enums are enforced. A plain JSON
+   Schema without `x-order` fails with `keyNotFound`, so the converter
+   fallback is needed. `GeneratedContent.jsonString` uses `", "` and
+   `": "`, so afm serialises output itself.
+6. Pass.
+7. Pass. Cancellation throws `CancellationError` at once; the next call
+   takes the usual 260 ms.
+8. Pass (112 and 112 tokens for the same prompt).
+9. Pass.
+10. The instructions entry counts 54 more tokens with one tool than
+    without; `tokenCount(for: tools)` reports 100 for the same tool. Tools
+    are counted through the transcript only (see Budget).
+
+Also observed: an input of about 9000 words fails with
+`guardrailViolation`, not `contextSizeExceeded`, as with `fm`; the pre-call
+budget check is what turns that into exit 6. Errors arrive as
+`LanguageModelError`; the deprecated `LanguageModelSession.GenerationError`
+is mapped the same way in case it is thrown. `GenerationOptions` is built
+with `samplingMode:` (`sampling:` is deprecated).
 
 ## Non-goals (v1)
 
