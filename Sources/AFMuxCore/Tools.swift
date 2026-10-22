@@ -51,6 +51,15 @@ public final class ToolContext: @unchecked Sendable {
             if try await counter.count(prompt: candidate, instructions: nil) <= cap { return candidate }
             keep = min(keep - 1, keep * 9 / 10)
         }
+        // Not even the first line fits: cut it by characters rather than return only a marker.
+        let first = lines[0]
+        let rest = lines.count > 1 ? "\n" + marker(lines.count - 1, 1) : ""
+        var chars = first.count * cap / max(1, total)
+        while chars > 0 {
+            let candidate = String(first.prefix(chars)) + " [line truncated]" + rest
+            if try await counter.count(prompt: candidate, instructions: nil) <= cap { return candidate }
+            chars = min(chars - 1, chars * 9 / 10)
+        }
         return marker(lines.count, 0)
     }
 }

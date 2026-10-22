@@ -84,3 +84,13 @@ private func fixture() throws -> URL {
     let out = try await tool("list_dir", ctx).call(arguments: GeneratedContent(json: #"{"path":"\#(dir.path)"}"#))
     #expect(out == nearlyFull)
 }
+
+@Test func singleLongLineIsCutByCharacters() async throws {
+    let ctx = context(budget: 20)
+    let out = try await ctx.fit(String(repeating: "x", count: 400), cap: 20) { omitted, _ in "[truncated: \(omitted) more lines]" }
+    #expect(out.hasPrefix("xxxx"))
+    #expect(out.hasSuffix("[line truncated]"))
+    #expect(try await ctx.counter.count(prompt: out, instructions: nil) <= 20)
+    let multi = try await ctx.fit(String(repeating: "y", count: 400) + "\nsecond\nthird", cap: 20) { omitted, _ in "[truncated: \(omitted) more lines]" }
+    #expect(multi.hasPrefix("yyyy") && multi.hasSuffix("[truncated: 2 more lines]"))
+}

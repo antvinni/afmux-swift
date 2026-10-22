@@ -4251,3 +4251,11 @@ Where the code departs from the blocks above:
 - `App.swift`, `SessionTurn.swift`: `Optional.map` cannot take an async closure; the schema count is an `if let`.
 - `SchemaTests.converterProblems`: `{"type":"string"}` decodes as an fm-format `GenerationSchema`, so the top-level rule is tested on `SchemaLoader.convert` directly.
 - Session and compaction CLI tests read the last respond records: every turn of a test shares one log file.
+
+### After the PR #1 code review
+
+- `Proc.swift` rewritten: one thread polls both pipes against the tool deadline and stops reading 0.5 s after the child exits (descendants that leave the group no longer hang afm); `withTaskCancellationHandler` kills the group when the model call is cancelled, so `--timeout` cuts off a running tool; spawn resets INT/TERM/HUP to default, clears the signal mask inherited from the GCD thread, and passes only fds 0-2 (`POSIX_SPAWN_CLOEXEC_DEFAULT`); spawning and registration happen under the lock `killAll()` takes, closing the signal window.
+- Session lock fd is `O_CLOEXEC`; `afm sessions rm` deletes under the lock and keeps the lock file.
+- `ToolContext.fit` cuts a single over-long line by characters instead of returning only the marker.
+- `-h` returns help as soon as it is reached, as argparse does.
+- New tests in `Tests/CLITests/PRReviewTests.swift` for each finding, plus concurrent turns, lock release after a signal, stale tool definitions and the compaction second fold.

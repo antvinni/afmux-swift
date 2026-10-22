@@ -103,7 +103,10 @@ public func parseArgs(_ argv: [String]) throws -> Options {
             switch name {
             case "--chunk": o.chunk = true
             case "--list": o.list = true
-            default: o.help = true
+            default:
+                // argparse prints help as soon as it reaches -h, before checking what follows.
+                o.help = true
+                return o
             }
             continue
         }

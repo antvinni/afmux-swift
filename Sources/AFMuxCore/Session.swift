@@ -58,7 +58,7 @@ public struct SessionStore: Sendable {
     /// Exclusive flock on NAME.lock, retried every 50 ms until timeout.
     public func lock(_ name: String, timeout: Double) throws -> Int32 {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let fd = open(dir.appendingPathComponent(name + ".lock").path, O_CREAT | O_RDWR, 0o644)
+        let fd = open(dir.appendingPathComponent(name + ".lock").path, O_CREAT | O_RDWR | O_CLOEXEC, 0o644)
         guard fd >= 0 else { throw AfmError(.model, "cannot lock session \(name)") }
         let deadline = Date().addingTimeInterval(timeout)
         while flock(fd, LOCK_EX | LOCK_NB) != 0 {
@@ -88,12 +88,18 @@ public struct SessionStore: Sendable {
         }.joined()
     }
 
+    /// Delete a session under its lock. The lock file stays: unlinking it would let a waiting
+    /// turn and a new one lock different inodes at the same time.
     public func remove(_ name: String) throws {
         guard FileManager.default.fileExists(atPath: url(name).path) else {
             throw AfmError(.usage, "session \(name) does not exist")
         }
+        let fd = try lock(name, timeout: 2)
+        defer { unlock(fd) }
+        guard FileManager.default.fileExists(atPath: url(name).path) else {
+            throw AfmError(.usage, "session \(name) does not exist")
+        }
         try FileManager.default.removeItem(at: url(name))
-        try? FileManager.default.removeItem(at: dir.appendingPathComponent(name + ".lock"))
     }
 }
 

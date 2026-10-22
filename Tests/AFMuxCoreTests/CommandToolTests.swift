@@ -21,7 +21,7 @@ private func loadError(_ json: String) -> String? {
 }
 
 @Test func toolsFileValidation() {
-    #expect(loadError("[]") == nil || loadError("[]")!.contains("must be an object with a \"tools\" array"))
+    #expect(loadError("[]")?.hasSuffix("must be an object with a \"tools\" array") == true)
     #expect(loadError(#"{"tools":[{"name":"Bad"}]}"#) == "tool #1: name must match [a-z][a-z0-9_]*")
     #expect(loadError(#"{"tools":[{"name":"grep","description":"d","command":["x"]}]}"#) == "tool grep: name is taken by a built-in tool")
     #expect(loadError(#"{"tools":[{"name":"t","description":"d","command":["x"]},{"name":"t","description":"d","command":["x"]}]}"#) == "tool t: duplicate name")
