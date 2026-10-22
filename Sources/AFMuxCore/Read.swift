@@ -137,7 +137,7 @@ func reportRead(path: String, chunks: Int, tokens: Int, results: [QuestionResult
         .array(r.answers.map { .object([("lines", .string($0.lines)), ("quote", .string($0.quote))]) })
     }
     func failedField(_ r: QuestionResult) -> [(String, JSONValue)] {
-        r.failed > 0 ? [("failed", .int(r.failed))] : []
+        r.failed > 0 ? [("failed", .int(r.failed)), ("first_failure", .string(r.firstFailure ?? ""))] : []
     }
     if json {
         if results.count == 1, let r = results.first {

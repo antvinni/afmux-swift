@@ -34,7 +34,7 @@ IMPLEMENT_ENGINES = {
 READ_ENGINES = {
     "python": ([sys.executable, PY], []),
     "swift": ([SW], []),
-    "swift --chunk-tokens 600": ([SW], ["--chunk-tokens", "600"]),
+    "swift --chunk-tokens 1500": ([SW], ["--chunk-tokens", "1500"]),
 }
 
 

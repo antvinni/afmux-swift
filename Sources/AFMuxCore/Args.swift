@@ -6,7 +6,7 @@ public struct Options: Equatable, Sendable {
     public var command: String?
     public var target: String?
     public var asks: [String] = []
-    public var chunkTokens = 1500
+    public var chunkTokens = 600
     public var retries = 1
     public var timeout: Double = 120
     public var budget = 7168
@@ -33,7 +33,7 @@ options:
   -h, --help            show this help message and exit
   --ask ASK             read: the question to answer from the file (repeat to ask several)
   --chunk-tokens CHUNK_TOKENS
-                        read: target size of each chunk the model sees (default 1500)
+                        read: target size of each chunk the model sees (default 600)
   --retries RETRIES     retries per step, each shown the failing test output (default 1)
   --timeout TIMEOUT     seconds per model call (default 120)
   --budget BUDGET       maximum prompt tokens per call (default 7168)
