@@ -130,7 +130,7 @@ A small hand-written parser, so exit codes and messages are exact:
   - `unrecognized arguments: a b` (unknown options and extra positionals,
     space separated, in order)
   - `argument --chunk: ignored explicit argument 'yes'` (a value given with
-    `=` to a flag that takes none: `--chunk`, `--list`, `-h`/`--help`)
+    `=` to `--chunk` or `--list`; the option is named as written here)
 - `--guardrails` accepts `default` and `permissive-content-transformations`
   (mapped to `.default` and `.permissiveContentTransformations`).
   `--use-case` accepts `general` and `content-tagging`. Any other value is
@@ -424,7 +424,9 @@ is tested on those edge cases.
 ### Accepted differences from afmux
 
 - Option prefix abbreviations are not accepted.
-- `-h` output differs in layout from argparse's help.
+- `-h` output differs in layout from argparse's help, and `-h=x` or
+  `--help=x` is reported as `argument --help: ignored explicit argument
+  'x'` rather than argparse's `-h/--help` form.
 - Unknown `--guardrails` or `--use-case` values are exit 2, not exit 1.
 - The schema's share of `--budget` is `tokenCount(for: GenerationSchema)`
   rather than the token count of the schema file's text, so the exit-6
