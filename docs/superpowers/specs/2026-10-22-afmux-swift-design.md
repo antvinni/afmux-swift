@@ -129,6 +129,8 @@ A small hand-written parser, so exit codes and messages are exact:
     value)
   - `unrecognized arguments: a b` (unknown options and extra positionals,
     space separated, in order)
+  - `argument --chunk: ignored explicit argument 'yes'` (a value given with
+    `=` to a flag that takes none: `--chunk`, `--list`, `-h`/`--help`)
 - `--guardrails` accepts `default` and `permissive-content-transformations`
   (mapped to `.default` and `.permissiveContentTransformations`).
   `--use-case` accepts `general` and `content-tagging`. Any other value is
@@ -170,7 +172,7 @@ context.
 |---|---|---|
 | preset, stdin present | preset text (`{labels}` substituted) | stdin |
 | `ask "T"`, stdin present | `T` | stdin |
-| `ask "T"`, stdin absent (tools on, no session) | the fixed tool-use text below | `T` |
+| `ask "T"`, stdin absent, tools on (no session, or creating one) | the fixed tool-use text below | `T` |
 | preset, stdin absent, tools on | exit 2 (`input is empty`) | |
 
 Fixed tool-use text: `Answer the request. Use the tools to find the
