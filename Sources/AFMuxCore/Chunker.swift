@@ -1,5 +1,4 @@
 import Foundation
-import FoundationModels
 
 public struct Unit: Equatable, Sendable {
     public var text: String
@@ -9,7 +8,7 @@ public struct Unit: Equatable, Sendable {
 
 private let blankLines = try! NSRegularExpression(pattern: "\n[ \t]*\n+")
 
-/// Non-blank paragraphs separated by blank lines, each with its first line number.
+/// Non-blank paragraphs separated by blank lines, each with its first line number (afmux split_units).
 public func splitUnits(_ text: String) -> [Unit] {
     var units: [Unit] = []
     let ns = text as NSString
@@ -33,62 +32,50 @@ private func addUnit(_ units: inout [Unit], _ chunk: String, _ line: Int) {
     units.append(Unit(text: body, sep: units.isEmpty ? "" : "\n\n", line: line + leading))
 }
 
-private func explodeLines(_ unit: Unit) -> [Unit] {
-    var out: [Unit] = []
-    for (i, ln) in unit.text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-        if ln.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
-        out.append(Unit(text: String(ln), sep: out.isEmpty ? unit.sep : "\n", line: unit.line + i))
-    }
-    return out
-}
-
-private func join(_ units: [Unit]) -> String {
+func joinUnits(_ units: [Unit]) -> String {
     units.enumerated().map { ($0.offset > 0 ? $0.element.sep : "") + $0.element.text }.joined()
 }
 
-/// Pack units greedily by a byte ratio, confirming each piece with the counter (afmux plan_chunks).
-public func planChunks(text: String, instructions: Transcript.Instructions, schemaTokens: Int, budget: Int,
-                       maxChunks: Int, totalTokens: Int, counter: any TokenCounter) async throws -> [String] {
-    let instrTokens = try await counter.count(prompt: "", instructions: instructions)
-    let fixed = schemaTokens + instrTokens
-    let ratio = Double(max(1, totalTokens - instrTokens)) / Double(max(1, text.utf8.count))
-    var units = splitUnits(text)
-    var pieces: [String] = []
-    var i = 0
-    while i < units.count {
-        var piece: [Unit] = []
-        var nbytes = 0
-        while i < units.count {
-            let b = units[i].text.utf8.count + units[i].sep.utf8.count
-            if !piece.isEmpty && Double(nbytes + b) * ratio + Double(fixed) > Double(budget) { break }
-            piece.append(units[i])
-            nbytes += b
-            i += 1
+public struct Chunk: Equatable, Sendable {
+    public var text: String
+    public var firstLine: Int
+    public var lastLine: Int
+}
+
+/// afmux chunk_document: pack paragraphs into chunks of about chunkTokens by the file's measured
+/// tokens-per-byte ratio. Unlike the reference, a paragraph larger than one chunk (a log with no
+/// blank lines) is first split into its lines, so no chunk is the whole file.
+public func chunkDocument(_ text: String, chunkTokens: Int, totalTokens: Int) -> [Chunk] {
+    let ratio = Double(max(1, totalTokens)) / Double(max(1, text.utf8.count))
+    var units: [Unit] = []
+    for u in splitUnits(text) {
+        if Double(u.text.utf8.count + 2) * ratio <= Double(chunkTokens) || !u.text.contains("\n") {
+            units.append(u)
+            continue
         }
-        var candidate = ""
-        while true {
-            candidate = join(piece)
-            if try await counter.count(prompt: candidate, instructions: instructions) + schemaTokens <= budget { break }
-            if piece.count > 1 {
-                piece.removeLast()
-                i -= 1
-                continue
-            }
-            let u = piece[0]
-            if u.text.contains("\n") {
-                units.replaceSubrange((i - 1)..<i, with: explodeLines(u))
-                i -= 1
-                piece = []
-                break
-            }
-            let n = try await counter.count(prompt: u.text, instructions: nil)
-            throw AfmError(.budget, "line \(u.line) is \(n) tokens plus \(fixed) for instructions and schema, budget is \(budget)")
-        }
-        if piece.isEmpty { continue }
-        pieces.append(candidate)
-        if pieces.count > maxChunks {
-            throw AfmError(.budget, "input needs more than \(maxChunks) chunks, max is \(maxChunks)")
+        for (i, ln) in u.text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            units.append(Unit(text: String(ln), sep: i == 0 ? u.sep : "\n", line: u.line + i))
         }
     }
-    return pieces
+    var chunks: [Chunk] = []
+    var current: [Unit] = []
+    var bytes = 0
+    func close() {
+        let last = current.last!
+        chunks.append(Chunk(text: joinUnits(current), firstLine: current[0].line,
+                            lastLine: last.line + last.text.filter { $0 == "\n" }.count))
+    }
+    for u in units {
+        let b = u.text.utf8.count + 2
+        if !current.isEmpty && Double(bytes + b) * ratio > Double(chunkTokens) {
+            close()
+            current = []
+            bytes = 0
+        }
+        // A chunk starts at its first unit: its separator belongs to the boundary, not the chunk.
+        current.append(current.isEmpty ? Unit(text: u.text, sep: "", line: u.line) : u)
+        bytes += b
+    }
+    if !current.isEmpty { close() }
+    return chunks
 }

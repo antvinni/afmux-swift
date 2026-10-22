@@ -1,67 +1,69 @@
 import Foundation
 
+public let usageText = "afm run <steps-dir> [--retries N] [--timeout S] [--budget T] [--json] | afm step <step-file> [options] | afm read <file> --ask \"question\" [--chunk-tokens N] [--json]"
+
 public struct Options: Equatable, Sendable {
-    public var job: String?
-    public var instructions: String?
-    public var labels: String?
-    public var schema: String?
-    public var guardrails = "permissive-content-transformations"
-    public var guardrailsGiven = false
-    public var useCase = "general"
-    public var useCaseGiven = false
+    public var command: String?
+    public var target: String?
+    public var asks: [String] = []
+    public var chunkTokens = 600
+    public var retries = 1
     public var timeout: Double = 120
     public var budget = 7168
-    public var chunk = false
-    public var maxChunks = 8
-    public var list = false
+    public var json = false
     public var help = false
-    public var toolsFS = false
-    public var toolsFile: String?
-    public var maxToolCalls = 8
-    public var toolOutputBudget = 600
-    public var toolTimeout: Double = 30
-    public var session: String?
+    // afmux-swift additions (MinionS ideas); defaults keep afmux's behaviour
+    public var samples = 1
+    public var split = false
+    public var lines: ClosedRange<Int>?
 
     public init() {}
-
-    public var toolsOn: Bool { toolsFS || toolsFile != nil }
 }
 
-public let helpText = usageLine + """
+public let helpText = """
+usage: \(usageText)
 
+Implement agent-written, test-gated steps on the on-device Apple Foundation Model.
+
+positional arguments:
+  {run,step,read}       run: every step in a directory in filename order; step: one step file; read: answer a question about a file chunk by chunk
+  target                the steps directory (run), the step file (step), or the document (read)
 
 options:
-  --labels a,b,c            classify only: the allowed labels
-  --schema FILE             JSON schema for structured output (fm format or plain JSON Schema)
-  --guardrails LEVEL        default | permissive-content-transformations (default)
-  --use-case CASE           general (default) | content-tagging
-  --timeout SECONDS         per model call (default 120)
-  --budget TOKENS           instructions + input + schema per call (default 7168)
-  --chunk                   split over-budget input into pieces
-  --max-chunks N            with --chunk (default 8)
-  --tools fs                built-in tools: read_file, grep, list_dir
-  --tools-file FILE         caller-defined command tools
-  --max-tool-calls N        per model call (default 8)
-  --tool-output-budget N    tokens per tool result (default 600)
-  --tool-timeout SECONDS    per tool call (default 30)
-  --session NAME            keep a transcript across calls
-  --list                    list presets
-  -h, --help                show this help
+  -h, --help            show this help message and exit
+  --ask ASK             read: the question to answer from the file (repeat to ask several)
+  --chunk-tokens CHUNK_TOKENS
+                        read: target size of each chunk the model sees (default 600)
+  --retries RETRIES     retries per step, each shown the failing test output (default 1)
+  --timeout TIMEOUT     seconds per model call (default 120)
+  --budget BUDGET       maximum prompt tokens per call (default 7168)
+  --json                machine-readable report on stdout
+  --samples K           run/step: after a failing greedy attempt, test up to K-1 seeded samples before retrying (default 1)
+  --split               run/step: generate a new module one function at a time, then test it whole
+  --lines A-B           read: read only lines A to B (citations keep the file's line numbers)
 
-  afm sessions              list sessions
-  afm sessions rm NAME      delete a session
+step file (steps/01-name.md), header then --- then the spec:
+  file: src/util.py                          the one file this step writes (relative to the current directory)
+  test: python3 -m unittest tests.test_util  run from the current directory; exit 0 means the step passed
+  context: src/types.py, src/errors.py       optional, comma-separated read-only files shown to the model
+  ---
+  Write a Python function ...
+
+A step whose test already passes against the current file is reported as done and not regenerated,
+so reruns skip finished steps and leave hand-written ones alone. On a final failure the original file
+is restored (or a new one removed) and the attempt is kept at <file>.afm-failed with the test output
+at <file>.afm-failed.log. Exit codes: 0 all passed, 1 a step failed, 2 usage, 4 fm unavailable,
+5 sandbox, 6 a step's prompt over budget.
 
 """
 
-private let valueOptions: Set<String> = [
-    "--labels", "--schema", "--guardrails", "--use-case", "--timeout", "--budget", "--max-chunks",
-    "--tools", "--tools-file", "--max-tool-calls", "--tool-output-budget", "--tool-timeout", "--session",
-]
-private let flagOptions: Set<String> = ["--chunk", "--list", "--help"]
+private let valueOptions: Set<String> = ["--ask", "--chunk-tokens", "--retries", "--timeout", "--budget", "--samples", "--lines"]
+private let flagOptions: Set<String> = ["--json", "--help", "--split"]
+private let commands = ["run", "step", "read"]
 
-/// An argparse-style error: the message, then the usage line.
-public func usageError(_ message: String) -> AfmError {
-    AfmError(.usage, message + "\n" + usageLine)
+/// An argparse-style error: the message, then the usage line (afmux's _Parser.error).
+func usageError(_ message: String) -> AfmError {
+    AfmError(.usage, message + "\nusage: " + usageText)
 }
 
 /// argparse treats "-x..." as an option unless it is a negative number or contains a space.
@@ -101,8 +103,8 @@ public func parseArgs(_ argv: [String]) throws -> Options {
         if flagOptions.contains(name) {
             if let inline { throw usageError("argument \(name): ignored explicit argument \(pyRepr(inline))") }
             switch name {
-            case "--chunk": o.chunk = true
-            case "--list": o.list = true
+            case "--json": o.json = true
+            case "--split": o.split = true
             default:
                 // argparse prints help as soon as it reaches -h, before checking what follows.
                 o.help = true
@@ -125,8 +127,13 @@ public func parseArgs(_ argv: [String]) throws -> Options {
         }
         try apply(name, value, to: &o)
     }
-    if positionals.count > 0 { o.job = positionals[0].1 }
-    if positionals.count > 1 { o.instructions = positionals[1].1 }
+    if let (_, command) = positionals.first {
+        guard commands.contains(command) else {
+            throw usageError("argument command: invalid choice: \(pyRepr(command)) (choose from 'run', 'step', 'read')")
+        }
+        o.command = command
+    }
+    if positionals.count > 1 { o.target = positionals[1].1 }
     unrecognized += positionals.dropFirst(2)
     if !unrecognized.isEmpty {
         let leftovers = unrecognized.sorted { $0.0 < $1.0 }.map(\.1)
@@ -138,21 +145,18 @@ public func parseArgs(_ argv: [String]) throws -> Options {
 
 private func apply(_ name: String, _ v: String, to o: inout Options) throws {
     switch name {
-    case "--labels": o.labels = v
-    case "--schema": o.schema = v
-    case "--guardrails": o.guardrails = v; o.guardrailsGiven = true
-    case "--use-case": o.useCase = v; o.useCaseGiven = true
+    case "--ask": o.asks.append(v)
+    case "--chunk-tokens": o.chunkTokens = try int(name, v)
+    case "--retries": o.retries = try int(name, v)
     case "--timeout": o.timeout = try float(name, v)
     case "--budget": o.budget = try int(name, v)
-    case "--max-chunks": o.maxChunks = try int(name, v)
-    case "--tools":
-        guard v == "fs" else { throw AfmError(.usage, "--tools accepts only fs") }
-        o.toolsFS = true
-    case "--tools-file": o.toolsFile = v
-    case "--max-tool-calls": o.maxToolCalls = try int(name, v)
-    case "--tool-output-budget": o.toolOutputBudget = try int(name, v)
-    case "--tool-timeout": o.toolTimeout = try float(name, v)
-    case "--session": o.session = v
+    case "--samples": o.samples = try int(name, v)
+    case "--lines":
+        let parts = v.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 2, let a = Int(parts[0]), let b = Int(parts[1]), a >= 1, a <= b else {
+            throw AfmError(.usage, "--lines must be A-B with 1 <= A <= B")
+        }
+        o.lines = a...b
     default: break
     }
 }
@@ -171,18 +175,19 @@ private func float(_ name: String, _ v: String) throws -> Double {
     return x
 }
 
+/// afmux's parse_args checks, in its order.
 private func validate(_ o: Options) throws {
-    func positive(_ x: Double) -> Bool { x > 0 && !x.isInfinite }
-    if !positive(o.timeout) { throw AfmError(.usage, "--timeout must be a positive number of seconds") }
+    guard let command = o.command, let target = o.target, !target.isEmpty else {
+        throw AfmError(.usage, "usage: " + usageText)
+    }
+    if o.retries < 0 { throw AfmError(.usage, "--retries must be 0 or more") }
+    if !(o.timeout > 0) || o.timeout.isInfinite { throw AfmError(.usage, "--timeout must be a positive number of seconds") }
     if o.budget < 1 { throw AfmError(.usage, "--budget must be at least 1") }
-    if o.maxChunks < 1 { throw AfmError(.usage, "--max-chunks must be at least 1") }
-    if !["default", "permissive-content-transformations"].contains(o.guardrails) {
-        throw AfmError(.usage, "--guardrails must be default or permissive-content-transformations")
+    if command == "read" {
+        if o.asks.isEmpty || o.asks.contains(where: { $0.stripped().isEmpty }) {
+            throw AfmError(.usage, "read needs --ask \"question\"")
+        }
+        if o.chunkTokens < 50 { throw AfmError(.usage, "--chunk-tokens must be at least 50") }
     }
-    if !["general", "content-tagging"].contains(o.useCase) {
-        throw AfmError(.usage, "--use-case must be general or content-tagging")
-    }
-    if o.maxToolCalls < 1 { throw AfmError(.usage, "--max-tool-calls must be at least 1") }
-    if o.toolOutputBudget < 1 { throw AfmError(.usage, "--tool-output-budget must be at least 1") }
-    if !positive(o.toolTimeout) { throw AfmError(.usage, "--tool-timeout must be a positive number of seconds") }
+    if o.samples < 1 { throw AfmError(.usage, "--samples must be at least 1") }
 }

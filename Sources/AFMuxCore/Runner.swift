@@ -1,44 +1,41 @@
 import Foundation
 import FoundationModels
 
-public struct ModelCall: Sendable {
-    public var instructions: Transcript.Instructions
-    public var history: [Transcript.Entry]
-    public var prompt: String
-    public var schema: GenerationSchema?
-    public var tools: [any Tool]
-    public var maxResponseTokens: Int?
+/// How one generation samples. afmux's first attempt is greedy and its retries use fm's
+/// default sampling; `--samples` adds seeded samples.
+public enum Sampling: Sendable, Equatable {
+    case greedy
+    case standard
+    case seeded(UInt64)
 
-    public init(instructions: Transcript.Instructions, history: [Transcript.Entry] = [], prompt: String,
-                schema: GenerationSchema? = nil, tools: [any Tool] = [], maxResponseTokens: Int? = nil) {
-        self.instructions = instructions
-        self.history = history
-        self.prompt = prompt
-        self.schema = schema
-        self.tools = tools
-        self.maxResponseTokens = maxResponseTokens
+    var mode: GenerationOptions.SamplingMode? {
+        switch self {
+        case .greedy: return .greedy
+        case .standard: return nil
+        case .seeded(let seed): return .random(probabilityThreshold: 0.95, seed: seed)
+        }
     }
 }
 
 public struct ModelAnswer: Sendable {
     public var text: String
     public var content: GeneratedContent?
-    public var transcript: Transcript
 }
 
-/// One greedy model call on a fresh session built from instructions + history.
-public func runModel(_ call: ModelCall, model: any LanguageModel) async throws -> ModelAnswer {
-    let transcript = Transcript(entries: [.instructions(call.instructions)] + call.history)
-    let session = makeSession(model, tools: call.tools, transcript: transcript)
-    let options = GenerationOptions(samplingMode: .greedy, maximumResponseTokens: call.maxResponseTokens)
-    if let schema = call.schema {
-        let r = try await session.respond(to: call.prompt, schema: schema, options: options)
-        return ModelAnswer(text: compactJSON(r.content, topOrder: SchemaLoader.order(schema)), content: r.content, transcript: session.transcript)
+/// One model call on a fresh session: instructions, then the prompt, optionally with a schema.
+public func runModel(instructions: String, prompt: String, sampling: Sampling, schema: GenerationSchema? = nil,
+                     model: any LanguageModel) async throws -> ModelAnswer {
+    let transcript = Transcript(entries: [.instructions(instructionsEntry(instructions, tools: []))])
+    let session = makeSession(model, transcript: transcript)
+    let options = GenerationOptions(samplingMode: sampling.mode)
+    if let schema {
+        let r = try await session.respond(to: prompt, schema: schema, options: options)
+        return ModelAnswer(text: compactJSON(r.content, topOrder: SchemaLoader.order(schema)), content: r.content)
     }
-    let r = try await session.respond(to: call.prompt, options: options)
-    return ModelAnswer(text: r.content, content: nil, transcript: session.transcript)
+    let r = try await session.respond(to: prompt, options: options)
+    return ModelAnswer(text: r.content, content: nil)
 }
 
-private func makeSession(_ model: some LanguageModel, tools: [any Tool], transcript: Transcript) -> LanguageModelSession {
-    LanguageModelSession(model: model, tools: tools, transcript: transcript)
+private func makeSession(_ model: some LanguageModel, transcript: Transcript) -> LanguageModelSession {
+    LanguageModelSession(model: model, tools: [], transcript: transcript)
 }

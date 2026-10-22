@@ -4,72 +4,68 @@ import Testing
 private let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 private let binary = root.appendingPathComponent(".build/debug/afm").path
 
-private func run(_ args: [String], stdin: String = "", cwd: URL? = nil, sessions: URL? = nil) throws -> (Int32, String, String) {
+private func run(_ args: [String], cwd: URL) throws -> (Int32, String, String) {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: binary)
     p.arguments = args
     var e = ProcessInfo.processInfo.environment
     e.removeValue(forKey: "AFMUX_FAKE")
-    if let sessions { e["AFMUX_SESSIONS_DIR"] = sessions.path }
     p.environment = e
-    if let cwd { p.currentDirectoryURL = cwd }
-    let out = Pipe(), err = Pipe(), input = Pipe()
+    p.currentDirectoryURL = cwd
+    let out = Pipe(), err = Pipe()
     p.standardOutput = out
     p.standardError = err
-    p.standardInput = input
+    p.standardInput = FileHandle.nullDevice
     try p.run()
-    input.fileHandleForWriting.write(Data(stdin.utf8))
-    try input.fileHandleForWriting.close()
     let o = out.fileHandleForReading.readDataToEndOfFile(), r = err.fileHandleForReading.readDataToEndOfFile()
     p.waitUntilExit()
     return (p.terminationStatus, String(decoding: o, as: UTF8.self), String(decoding: r, as: UTF8.self))
 }
 
-private let realModelWorks: Bool = {
-    guard FileManager.default.isExecutableFile(atPath: binary) else { return false }
-    return (try? run(["ask", "Reply with one word."], stdin: "hi").0) == 0
-}()
-
 private func tmp() -> URL {
     let u = FileManager.default.temporaryDirectory.appendingPathComponent("afm-int-" + UUID().uuidString)
-    try! FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+    try! FileManager.default.createDirectory(at: u.appendingPathComponent("steps"), withIntermediateDirectories: true)
     return u
 }
 
+private let realModelWorks: Bool = {
+    guard FileManager.default.isExecutableFile(atPath: binary) else { return false }
+    let dir = tmp()
+    try? "hello\n".write(to: dir.appendingPathComponent("doc.md"), atomically: true, encoding: .utf8)
+    return (try? run(["read", "doc.md", "--ask", "What does it say?"], cwd: dir).0) == 0
+}()
+
 @Suite(.enabled(if: realModelWorks, "on-device model not usable here"), .serialized)
 struct RealModelTests {
-    @Test func classifyReal() throws {
-        let (code, out, err) = try run(["classify", "--labels", "positive,negative"], stdin: "I absolutely loved this film.")
-        #expect(code == 0, "\(err)")
-        let obj = try JSONSerialization.jsonObject(with: Data(out.utf8)) as! [String: Any]
-        #expect(["positive", "negative"].contains(obj["label"] as! String))
-    }
-
-    @Test func extractWithFmFormatSchema() throws {
+    @Test func slugifyStepOnRealModel() throws {
         let dir = tmp()
-        let schema = dir.appendingPathComponent("s.json")
-        try #"{"title":"Counts","type":"object","properties":{"errors":{"type":"integer"}},"required":["errors"],"x-order":["errors"],"additionalProperties":false}"#
-            .write(to: schema, atomically: true, encoding: .utf8)
-        let (code, out, err) = try run(["extract", "--schema", schema.path], stdin: "The build finished with 3 errors and 2 warnings.")
-        #expect(code == 0, "\(err)")
-        #expect(out == "{\"errors\":3}\n")
+        try """
+        import unittest
+        from util import slugify
+        class T(unittest.TestCase):
+            def test_basic(self): self.assertEqual(slugify("Hello, World!"), "hello-world")
+            def test_empty(self): self.assertEqual(slugify("!!!"), "")
+
+        """.write(to: dir.appendingPathComponent("test_util.py"), atomically: true, encoding: .utf8)
+        try """
+        file: util.py
+        test: python3 -m unittest test_util
+        ---
+        Write a Python function `slugify(title)`. Lowercase the string, replace every run of characters that are not ASCII letters or digits with a single hyphen, and strip leading and trailing hyphens. Examples: slugify("Hello, World!") == "hello-world"; slugify("!!!") == "".
+
+        """.write(to: dir.appendingPathComponent("steps/01-slugify.md"), atomically: true, encoding: .utf8)
+        let (code, out, err) = try run(["run", "steps"], cwd: dir)
+        #expect(code == 0, "\(out)\(err)")
+        #expect(out.contains("pass"))
     }
 
-    @Test func twoTurnSession() throws {
-        let sessions = tmp()
-        #expect(try run(["ask", "Remember the facts you are given.", "--session", "it"], stdin: "The project codename is BLUEHERON.", sessions: sessions).0 == 0)
-        let (code, out, err) = try run(["ask", "What is the project codename? Reply with the codename only.", "--session", "it"], sessions: sessions)
-        #expect(code == 0, "\(err)")
-        #expect(out.uppercased().contains("BLUEHERON"))
-    }
-
-    @Test func toolsFindAString() throws {
+    @Test func readFindsAnErrorInALogWithoutBlankLines() throws {
         let dir = tmp()
-        try FileManager.default.createDirectory(at: dir.appendingPathComponent("docs"), withIntermediateDirectories: true)
-        try "nothing here\n".write(to: dir.appendingPathComponent("docs/a.txt"), atomically: true, encoding: .utf8)
-        try "the magic token is ZEBRA-42\n".write(to: dir.appendingPathComponent("docs/notes.txt"), atomically: true, encoding: .utf8)
-        let (code, out, err) = try run(["ask", "--tools", "fs", "Which file under docs contains the text ZEBRA-42? Reply with the file name only."], cwd: dir)
-        #expect(code == 0, "\(err)")
-        #expect(out.contains("notes.txt"))
+        var lines = (0..<3000).map { String(format: "2026-10-22T10:%02d:%02d INFO worker-%d processed batch %d", $0 / 60 % 60, $0 % 60, $0 % 9 + 1, $0) }
+        lines[2400] = "2026-10-22T10:40:00 ERROR worker-3 disk quota exceeded on /var/data (used 98.7%)"
+        try (lines.joined(separator: "\n") + "\n").write(to: dir.appendingPathComponent("app.log"), atomically: true, encoding: .utf8)
+        let (code, out, err) = try run(["read", "app.log", "--ask", "Which error happened and on which path?"], cwd: dir)
+        #expect(code == 0, "\(out)\(err)")
+        #expect(out.contains("/var/data"), "\(out)")
     }
 }

@@ -3,7 +3,8 @@ import FoundationModels
 
 public protocol Backend: Sendable {
     var counter: any TokenCounter { get }
-    func model(guardrails: String, useCase: String) -> any LanguageModel
+    /// The model `fm respond` uses: default guardrails, general use case.
+    func model() -> any LanguageModel
     func isAvailable() -> Bool
 }
 
@@ -12,10 +13,8 @@ public struct SystemBackend: Backend {
 
     public var counter: any TokenCounter { SystemTokenCounter() }
 
-    public func model(guardrails: String, useCase: String) -> any LanguageModel {
-        SystemLanguageModel(
-            useCase: useCase == "content-tagging" ? .contentTagging : .general,
-            guardrails: guardrails == "default" ? .default : .permissiveContentTransformations)
+    public func model() -> any LanguageModel {
+        SystemLanguageModel.default
     }
 
     public func isAvailable() -> Bool {
