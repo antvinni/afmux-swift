@@ -94,8 +94,8 @@ use both fakes, for the CLI tests.
 - Command shapes: `afm <preset> [opts] < input`,
   `afm ask "<instructions>" [opts] < input`, `afm --list`.
 - Presets `summarise`, `classify`, `extract`, `commit-msg`, with afmux's
-  instruction texts. `--list` prints `name<TAB>first line` per preset,
-  sorted, as afmux does.
+  instruction texts. `--list` prints one line per preset, sorted by name,
+  formatted as afmux's `"%-12s %s" % (name, first_line)`.
 - Options `--labels`, `--schema`, `--guardrails` (default
   `permissive-content-transformations`), `--use-case` (default `general`),
   `--timeout` (default 120), `--budget` (default 7168), `--chunk`,
@@ -115,11 +115,20 @@ use both fakes, for the CLI tests.
 A small hand-written parser, so exit codes and messages are exact:
 
 - Accepted: `--opt value`, `--opt=value`, options before or after the
-  positionals, `--` ending options, `-h`/`--help` (prints usage, exit 0).
+  positionals, `--` ending options, `-h`/`--help` (prints the usage line
+  and an option list in afm's own format, exit 0).
 - Not accepted: option prefix abbreviations (`--sch` for `--schema`), which
   Python's argparse allows. The SKILL.md uses full names.
 - Parser errors print `afm: <message>` followed by a second line with the
-  usage string, exactly as afmux does; exit 2.
+  usage string, exactly as afmux does; exit 2. The messages reproduce
+  argparse's texts for the cases afm can hit:
+  - `argument --budget: invalid int value: 'x'` (also `--max-chunks`,
+    `--max-tool-calls`, `--tool-output-budget`)
+  - `argument --timeout: invalid float value: 'x'` (also `--tool-timeout`)
+  - `argument --schema: expected one argument` (any option missing its
+    value)
+  - `unrecognized arguments: a b` (unknown options and extra positionals,
+    space separated, in order)
 - `--guardrails` accepts `default` and `permissive-content-transformations`
   (mapped to `.default` and `.permissiveContentTransformations`).
   `--use-case` accepts `general` and `content-tagging`. Any other value is
@@ -148,9 +157,10 @@ context.
 
 - As in afmux: stdin must not be a terminal and must not be empty or
   whitespace only.
-- Exceptions: when `--session` names an existing session, or any tools are
-  enabled, stdin may be a terminal or empty; it is then treated as absent
-  and not read if a terminal.
+- Exceptions: when `--session` names an existing `ask` session, or any
+  tools are enabled on an `ask` call, stdin may be a terminal or empty; it
+  is then treated as absent and not read if a terminal. Preset calls always
+  need stdin, with or without a session.
 - New usage errors (exit 2): `--chunk` with `--session`; `--chunk` with any
   tools.
 
@@ -165,6 +175,20 @@ context.
 
 Fixed tool-use text: `Answer the request. Use the tools to find the
 information you need. Reply with only the answer.`
+
+### Budget
+
+One rule for every call, with or without a session or tools:
+
+**pre-call total** = instructions + tool definitions + prior transcript
+entries (sessions only) + prompt + schema.
+
+Tool definitions are counted with `tokenCount(for: tools)` unless Step 0
+shows that `tokenCount(for: transcriptEntries)` already includes the
+instructions entry's `toolDefinitions`, in which case they are counted
+there and not again. Either way they are counted exactly once. If the
+pre-call total exceeds `--budget`, the call does not start (exit 6, or
+compaction in a session, or splitting under `--chunk`).
 
 ## Sessions and compaction
 
@@ -183,7 +207,9 @@ information you need. Reply with only the answer.`
   The instructions entry is not repeated.
 - `--labels`, `--guardrails`, `--use-case`: fixed at creation. Passing a
   different explicit value on a later call is exit 2; passing the same
-  value or omitting it is fine.
+  value or omitting it is fine. The stored values are filled in before
+  afmux's usage validation runs, so a later `classify` turn without
+  `--labels` does not hit `classify needs --labels a,b,c`.
 - Per turn: `--schema` and tools may differ. Each call builds a fresh
   `LanguageModelSession(model:tools:transcript:)`. Before building it, afm
   rewrites the stored instructions entry's tool definitions to the current
@@ -201,14 +227,14 @@ information you need. Reply with only the answer.`
 - Saved only when the turn exits 0, by writing a temporary file in the same
   directory and renaming it. A failed turn leaves the file unchanged.
 - Concurrent calls on one session serialise on an exclusive `flock` of
-  `NAME.lock`. The wait is bounded by `--timeout`; on expiry exit 1 with
-  `session NAME is busy`.
+  `NAME.lock`, taken with `LOCK_EX | LOCK_NB` and retried every 50 ms until
+  `--timeout` has passed; then exit 1 with `session NAME is busy`.
 - No expiry, rename, fork or export in v1.
 
 ### Compaction
 
-Before each turn, afm counts transcript entries (including instructions and
-tool definitions) + new prompt + schema. If the sum exceeds `--budget`:
+Before each turn, afm computes the pre-call total (see Budget) for the
+stored transcript plus the new prompt. If it exceeds `--budget`:
 
 1. Keep the instructions entry and the most recent complete turn (prompt,
    tool calls and outputs, response) verbatim.
@@ -287,8 +313,9 @@ and a `parameters` property returning the runtime-built `GenerationSchema`.
 
 ### Limits (context, not safety)
 
-Within one model call afm keeps a running count: the pre-call total
-(transcript, prompt, schema) plus every tool result returned so far,
+Within one model call afm keeps a running count: the pre-call total (see
+Budget) plus, for every tool call so far, the tokens of its arguments
+(counted as a prompt of their compact JSON) and of its returned result,
 against `contextSize` minus a 1024-token output reserve.
 
 - Each result is first capped at `--tool-output-budget` tokens, then at
@@ -298,9 +325,11 @@ against `contextSize` minus a 1024-token output reserve.
 - When less than 100 tokens of room remain, the tool returns
   `Context nearly full. Answer now with what you have.` instead of running.
 - The tool-call cap is a counter checked inside each tool's `call`; the
-  call after the cap throws, which ends the model call with exit 1 and
-  `more than N tool calls`. (The framework's `ToolCallingMode` has no
-  count limit.)
+  call after the cap throws `ToolCapExceeded`, which ends the model call
+  with exit 1 and `more than N tool calls`. (The framework's
+  `ToolCallingMode` has no count limit.) The framework delivers errors
+  thrown from `Tool.call` wrapped in `ToolCallError`; the error mapper
+  unwraps `underlyingError` first and maps that.
 - `--tool-timeout` per tool call; on expiry the group is killed and the
   model receives `timed out after N s`.
 - If generation still throws `contextSizeExceeded`, exit 1 with
@@ -340,9 +369,15 @@ Structured output is serialised from `GeneratedContent` to match afmux's
 
 ## Error handling
 
-All errors pass through one mapping function. After any framework failure,
-token counting included, afm checks `SystemLanguageModel.availability`; if
-it is `.unavailable(_)` the exit is 4, whatever the original error.
+All errors pass through one mapping function, which decides in this order:
+
+1. `ToolCallError`: unwrap `underlyingError` and continue with it.
+2. ModelManager error 1008 (agent sandbox): exit 5. This is checked first
+   because inside a sandbox the availability check may itself report the
+   model unavailable, and SKILL.md gives opposite advice for 4 and 5.
+3. Any other framework failure, token counting included: check
+   `SystemLanguageModel.availability`; if it is `.unavailable(_)`, exit 4.
+4. Otherwise the table below.
 
 | Source | Exit |
 |---|---|
@@ -372,15 +407,22 @@ and agents may match them:
 - `interrupted by signal %d`
 - `fm is blocked by a sandbox; run afm outside it`
 - `model not available`
-- `label %r is not one of a, b, c` (`%r` as Python repr: `'x'`, or `None`)
+- `label %r is not one of a, b, c` (`None` when there is no label)
 - all usage messages in afmux's `resolve_job`, `parse_labels` and
-  `read_input`, with `%r` rendered as Python repr.
+  `read_input`.
+
+`%r` follows Python's `repr` for `str`: single quotes, unless the string
+contains `'` and no `"`, then double quotes; backslash, the chosen quote,
+`\n`, `\r`, `\t` and other non-printable characters escaped as Python does;
+printable non-ASCII left as is. A `PythonRepr` helper implements this and
+is tested on those edge cases.
 
 ## Compatibility
 
 ### Accepted differences from afmux
 
 - Option prefix abbreviations are not accepted.
+- `-h` output differs in layout from argparse's help.
 - Unknown `--guardrails` or `--use-case` values are exit 2, not exit 1.
 - The schema's share of `--budget` is `tokenCount(for: GenerationSchema)`
   rather than the token count of the schema file's text, so the exit-6
@@ -473,7 +515,8 @@ item; if one fails, stop and revise the spec with the user.
    prompt, cold and warm (decides whether approach B is needed).
 2. Inside the Claude Code sandbox the in-process framework fails with
    ModelManager error 1008; record the error's type, domain and code, on
-   both `tokenCount` and `respond`.
+   both `tokenCount` and `respond`, and what
+   `SystemLanguageModel.availability` returns there.
 3. `LanguageModel` and its executor can be implemented outside Apple's
    code for FakeModel, including emitting tool calls.
 4. Synthetic `Transcript` entries (prompt, response, instructions with tool
@@ -489,6 +532,9 @@ item; if one fails, stop and revise the spec with the user.
 8. `tokenCount` gives the same numbers on
    `SystemLanguageModel(useCase:guardrails:)` as on `.default`.
 9. Swift Testing runs under the Command Line Tools without Xcode.
+10. Whether `tokenCount(for: transcriptEntries)` includes the instructions
+    entry's `toolDefinitions`, by comparing it with and without tools
+    against `tokenCount(for: tools)` (see Budget).
 
 ## Non-goals (v1)
 
