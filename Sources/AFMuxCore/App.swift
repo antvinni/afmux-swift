@@ -25,6 +25,7 @@ public struct IO: Sendable {
 
 public func runAfm(_ argv: [String], io: IO, backend: any Backend) async -> Int32 {
     do {
+        if argv.first == "sessions" { return try sessionsCommand(Array(argv.dropFirst()), io: io) }
         let o = try parseArgs(argv)
         if o.help {
             io.out(helpText)
@@ -34,6 +35,7 @@ public func runAfm(_ argv: [String], io: IO, backend: any Backend) async -> Int3
             io.out(Presets.listing())
             return 0
         }
+        if let name = o.session { return try await runSessionTurn(o, name: name, io: io, backend: backend) }
         return try await runOnce(o, io: io, backend: backend)
     } catch {
         let e = mapError(error, backend: backend)
