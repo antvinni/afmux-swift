@@ -56,7 +56,10 @@ func runSessionTurn(_ given: Options, name: String, io: IO, backend: any Backend
     var total = fixed + (try await counter.count(entries: history))
     let model = backend.model(guardrails: o.guardrails, useCase: o.useCase)
     if total > o.budget {
-        throw AfmError(.budget, "input is \(total) tokens, budget is \(o.budget)")
+        let compaction = Compaction(name: name, budget: o.budget, maxChunks: o.maxChunks, timeout: o.timeout,
+                                    counter: counter, model: model, backend: backend, err: io.err)
+        history = try await compaction.compact(history, fixed: fixed)
+        total = fixed + (try await counter.count(entries: history))
     }
     toolset.context?.start(used: total)
     let result: ModelAnswer
