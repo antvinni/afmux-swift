@@ -20,5 +20,6 @@ let package = Package(
         .executableTarget(name: "afm", dependencies: ["AFMuxCore"], swiftSettings: v5),
         .testTarget(name: "AFMuxCoreTests", dependencies: ["AFMuxCore"], swiftSettings: testSettings),
         .testTarget(name: "CLITests", dependencies: ["afm"], swiftSettings: testSettings),
+        .testTarget(name: "IntegrationTests", dependencies: ["afm"], swiftSettings: testSettings),
     ]
 )

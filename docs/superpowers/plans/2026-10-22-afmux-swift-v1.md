@@ -4239,3 +4239,15 @@ Expected: all unit and CLI tests pass; integration tests pass or are skipped.
 git add Package.swift Tests/IntegrationTests README.md
 git commit -m "Add real-model integration tests and README"
 ```
+
+---
+
+## Execution notes (2026-10-22)
+
+Where the code departs from the blocks above:
+
+- `Package.swift`: test targets use `testSettings`, which adds `-plugin-path` for the Command Line Tools' Swift Testing plugin directory when it exists. Without it the build system intermittently left `libTestingMacros` out of test compiles. Builds and tests run outside the agent sandbox, which blocks the macro plugin entirely.
+- `Args.swift`: leftovers are reported in argv order (unknown options and extra positionals interleaved), which is what argparse does; the plan's version listed unknown options first.
+- `App.swift`, `SessionTurn.swift`: `Optional.map` cannot take an async closure; the schema count is an `if let`.
+- `SchemaTests.converterProblems`: `{"type":"string"}` decodes as an fm-format `GenerationSchema`, so the top-level rule is tested on `SchemaLoader.convert` directly.
+- Session and compaction CLI tests read the last respond records: every turn of a test shares one log file.

@@ -566,11 +566,14 @@ results, per item below, are folded into this spec.
 
 1. Pass. Builds with no entitlements. A whole process for a one-word
    answer takes 260 to 290 ms. Approach B is not needed.
-2. Not reproducible here: this session's shell is not sandboxed. Detection
-   matches an `NSError` (or underlying error) with a domain containing
-   `ModelManager` and code 1008, falling back to the error's description
-   containing both `ModelManager` and `1008`. A manual check inside a
-   sandboxed agent session is listed in the README.
+2. Not reproduced. Later in the session the shell was sandboxed (Claude
+   Code), and the in-process framework still worked there: availability
+   `available`, a one-word answer in 960 ms, token counts as outside. The
+   same sandbox blocks the compiler's Swift Testing macro plugin, so builds
+   run outside it. Detection matches an `NSError` (or underlying error)
+   with a domain containing `ModelManager` and code 1008, falling back to
+   the error's description containing both `ModelManager` and `1008`. A
+   manual check inside a sandboxed agent session is listed in the README.
 3. Pass. FakeModel and its executor drive the framework's tool loop.
 4. Pass. Encode/decode is lossless and a new session answers from a
    synthetic summary entry.
