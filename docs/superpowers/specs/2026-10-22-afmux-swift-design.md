@@ -361,7 +361,10 @@ label is still checked against `--labels` (exit 3 on mismatch).
 Structured output is serialised from `GeneratedContent` to match afmux's
 `json.dumps(obj, separators=(",", ":"), ensure_ascii=False)`:
 
-- keys in the order of `.structure(orderedKeys:)`;
+- top-level keys in the schema's `x-order`, then any other keys in
+  `.structure(orderedKeys:)` order (measured: `orderedKeys` does not follow
+  the source text for keys outside the schema); nested objects in
+  `orderedKeys` order;
 - separators `,` and `:` with no spaces;
 - non-ASCII characters unescaped; `/` not escaped;
 - a number with an integral value and magnitude below 2^53 printed without
@@ -383,7 +386,7 @@ All errors pass through one mapping function, which decides in this order:
 |---|---|
 | usage: bad flags or values, schema that neither decodes nor converts, bad tools file, bad session name or job mismatch, fixed-at-creation option changed, `--chunk` with session or tools, stdin rules, `unsupportedGenerationGuide`, `GenerationSchema.SchemaError` | 2 |
 | `guardrailViolation`, `refusal`, framework `timeout`, `rateLimited`, `concurrentRequests`, `ToolCallError`, our `--timeout`, a signal, the tool-call cap, `contextSizeExceeded` during tool calls, session busy, any other framework error | 1 |
-| label not in `--labels`; structured content that cannot be serialised | 3 |
+| label not in `--labels`; `GeneratedContent.ParsingError` (output that is not valid JSON; message `model output is not valid JSON:` and the raw text on the next line, as afmux) | 3 |
 | model unavailable (availability check above), `assetsUnavailable` | 4 |
 | ModelManager error 1008 (agent sandbox), matched by error domain and code, on any framework call including token counting | 5 |
 | over budget before the call; `--chunk` over `--max-chunks`; a single line over budget; session too large to compact | 6 |
@@ -446,10 +449,9 @@ is tested on those edge cases.
   cut-off can move by a few tokens.
 - A `--schema` file without `x-order` is accepted (converted as plain JSON
   Schema) instead of exit 2.
-- `fm not found or not executable`, `fm count-tokens failed/returned ...`
-  and `model output is not valid JSON` cannot occur. An unavailable
-  framework is `model not available`, exit 4; exit 3 remains for label
-  mismatch and unserialisable content.
+- `fm not found or not executable` and `fm count-tokens failed/returned
+  ...` cannot occur. An unavailable framework is `model not available`,
+  exit 4.
 - afmux strips ANSI escapes from `fm`'s stderr; framework messages carry
   none, so there is nothing to strip.
 
@@ -476,7 +478,7 @@ fake backend's log (`count` and `respond` records).
 | `test_sigterm_kills_child_and_removes_temp_schema` | changed: no temp schema exists; exit 1, `interrupted`, empty stdout |
 | SchemaTests: classify schema fields | changed: the respond record's schema JSON has `label` enum `[bug, feature, question]` |
 | SchemaTests: instructions have labels, compact JSON, label outside list | ported |
-| `test_invalid_json_is_exit_3_with_raw_on_stderr` | dropped (cannot occur) |
+| `test_invalid_json_is_exit_3_with_raw_on_stderr` | ported: the framework throws `ParsingError` with the raw text |
 | `test_extract_uses_given_schema_and_compacts`, `test_ask_with_schema` | ported |
 | ChunkTests (8) | ported; the fake counter uses the shim's formula `ceil((prompt bytes + instructions bytes) / 4)` and `extraIfContains`, so budgets carry over |
 | ReviewFixTests (21) | ported, except: `test_instructions_starting_with_dash_use_equals_form` changed (record holds the instructions), `test_schema_without_x_order_is_usage_error` changed (accepted, see differences), `test_available_returning_1008_is_exit_5` changed (the respond error itself is the 1008), `test_fm_not_executable_is_exit_4` dropped, `test_ansi_stripped_from_fm_stderr` dropped |
